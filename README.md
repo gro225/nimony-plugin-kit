@@ -143,11 +143,11 @@ refuse an enum or `int` with the same message at the same position.
 | written with | lines |
 |---|---|
 | Nim 2 macro (`getTypeImpl`, `newProc`) | 24 |
-| Nimony plugin with this kit | 38 |
+| Nimony plugin with this kit | 36 |
 
-The plugin is longer, and it is fair to say why: it has to ask for the type
-declaration in a separate round, and the list of field statements is built as a
-tree before it is spliced into the proc. Two things in the Nim 2 version are
+The plugin is longer, and it is fair to say why: the list of field statements is
+built as a tree before it is spliced into the proc, and a type's declaration
+comes from the compiler rather than from a call. Two things in the Nim 2 version are
 easy to get wrong and the plugin does not have them: a field is an
 `nnkIdentDefs` that can hold several names (`x, y: float`), where the plugin
 sees one `fld` per name, and the type check had to be moved ahead of the field
@@ -156,6 +156,64 @@ access to give a message instead of a crash.
 The standard library's own `typetraits` plugin writes `slot(decl, idx)`
 (`firstChild` and a skip loop) and scans for declarations with `into`; that is
 `decl[idx]` and `for d in defs.children` in the kit.
+
+## Printing a tree
+
+`treeRepr(n)` and `lispRepr(n)` (also `$n`) print a node the way Nim 2's
+`treeRepr` and `repr` do:
+
+```
+(stmts
+  (let a . . .
+    (infix + 1 2))
+  (cmd echo "hi" a))
+```
+
+`lispRepr` is the same on one line. A symbol keeps its module suffix and a
+definition gets a leading colon, as in the NIF text form.
+
+## Asking for type declarations from top to bottom
+
+A plugin cannot look a type up: it runs in its own process, so it returns
+`needTypes` and the compiler runs it again with the declarations. `need` hides
+the round:
+
+```nim
+let decl = need(typ.symId)      # (type name export typevars pragmas body)
+if pending(): return createTree()
+let body = decl[4]              # from here on the declaration is really there
+```
+
+Every `need` before the `pending()` check goes into one request, so two types
+cost two runs of the plugin in all, not three (`tests/pair.nim` counts the
+runs). The request is sent by `pluginMain`, and an error recorded with `fail`
+wins over it. The result of `need` must not be read while `pending()` is true.
+
+It saves little code (`describe` went from 38 to 36 lines). What it removes is
+the need to know there are rounds at all, and the chance to ask twice for the
+same declaration, which the compiler rejects.
+
+## What the kit does not solve
+
+These come from how plugins are built, so a library over `plugins` cannot fix
+them:
+
+- **A plugin lives in a file of its own**, and the template points to it with a
+  string, `{.plugin: "deps/x".}`. A macro is written next to the code that uses
+  it. For a small local macro of a few lines that is a lot of ceremony. Only the
+  compiler could change it, for instance with a plugin block written in place.
+- **A plugin cannot call code from the module that uses it.** A Nim 2 macro runs
+  in the VM and can call a proc written earlier in the same file. A plugin sees
+  only what it imports, so shared code has to move to a module of its own. That
+  can be seen as cleaner, but it is a different habit.
+- **`bindSym` and the compiler error described above:** until it is fixed, a
+  hygienic symbol works only if the calling module imports its module too.
+- **A change to a module a plugin imports does not rebuild the plugin**
+  (`repros/plugin-import-not-tracked`), so a stale plugin can run after an edit.
+  The test runner clears the caches for this reason.
+- **The API is young.** The kit leans on `firstChild`, the tag enums and
+  `nifcore`, and Nimony is at 0.6.x, so any of them can change, and the kit with
+  them.
 
 ## Not done yet
 

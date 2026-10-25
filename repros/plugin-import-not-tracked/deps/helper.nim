@@ -1,0 +1,1 @@
+proc greeting*(): string = "one"

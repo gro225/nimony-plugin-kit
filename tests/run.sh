@@ -2,6 +2,9 @@
 # Runs every check against the installed nimony; prints one line per check
 cd "$(dirname "$0")/.." || exit 1
 fail=0
+# A plugin is not rebuilt when a module it imports changes (repros/plugin-import-not-tracked),
+# so start from nothing to be sure a check runs the code as it is now
+rm -rf tests/nimcache examples/glsl/nimcache examples/timed/nimony/nimcache examples/describe/nimcache
 check() { # name, expected, actual
   if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1"; echo "  want: $2"; echo "  got:  $3"; fail=1; fi
 }
@@ -55,4 +58,14 @@ check "describe: an enum is refused at the argument" \
 msg=$(nimony check bad_int.nim 2>&1 | head -1)
 check "describe: a non-object type is refused at the argument" \
   "bad_int.nim(5, 16) Error: defineDescribe needs an object type, int is not one" "$msg"
+cd ../../tests || exit 1
+check "kit: pair, two needs are answered in one round" "Cat+Dog" "$(rm -f runs.txt; nimony c -r pair.nim 2>/dev/null)"
+check "kit: and the plugin ran twice, not three times" "2" "$(wc -l < runs.txt | tr -d ' ')"
+rm -f runs.txt
+check "kit: $ and treeRepr" '(stmts (let a . . . (infix + 1 2)) (cmd echo "hi" a))
+--
+(stmts
+  (let a . . .
+    (infix + 1 2))
+  (cmd echo "hi" a))' "$(nimony c -r show.nim 2>/dev/null)"
 exit $fail

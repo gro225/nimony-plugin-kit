@@ -6,13 +6,11 @@ import ".." / ".." / ".." / pluginquote
 proc transform(n: NifCursor): NifBuilder =
   # (stmts defineDescribe <type>)
   let typ = n[1]
-  let defs = loadTypeDefinitions()
-  if defs.len == 0:                     # first round: ask for the declaration
-    if typ.kind != Symbol:
-      fail("defineDescribe needs the name of an object type", typ)
-      return createTree()
-    return needTypes(typ.symId)
-  let decl = defs[0]                    # (type name export typevars pragmas body)
+  if typ.kind != Symbol:
+    fail("defineDescribe needs the name of an object type", typ)
+    return createTree()
+  let decl = need(typ.symId)            # (type name export typevars pragmas body)
+  if pending(): return createTree()
   let body = decl[4]
   if body.typeKind != ObjectT:
     fail("defineDescribe needs an object type, " & name(typ) & " is not one", typ)
