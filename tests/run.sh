@@ -24,4 +24,14 @@ cd ../../tests || exit 1
 msg=$(nimony check novars.nim 2>&1 | head -1)
 check "kit: fail reports at the node, first error only" \
   "novars.nim(7, 7) Error: no variables allowed here: b" "$msg"
+check "quote: holes are replaced by nodes" "hi
+hi
+42" "$(nimony c -r quote.nim 2>/dev/null)"
+
+cp deps/twice.nim deps/twice.keep
+sed -i.bak 's/let \$1 = \$2 \* 10/let = $2 * 10/' deps/twice.nim
+msg=$(nimony check quote.nim 2>&1 | head -1)
+mv deps/twice.keep deps/twice.nim; rm -f deps/twice.nim.bak
+check "quote: a syntax error points into the quoted code" \
+  "quote.nim(9, 9) Error: identifier expected, but got '=' (at 1, 5 of the parsed code)" "$msg"
 exit $fail

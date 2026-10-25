@@ -44,20 +44,55 @@ through). The same plugin, with byte-identical output on both samples:
 | written with | lines |
 |---|---|
 | `into` / `skip` / `hasMore` | 313 |
-| this kit | 174 |
+| this kit, layers 1 and 3 | 162 |
 
 For reference, the generator in shd's Nim 2 macro (`core.nim`) is about 158
 lines for the same job, and it also emits Metal.
 
+## Layer 3: errors from anywhere in a walk (done)
+
+```nim
+proc transform(n: NifCursor): NifBuilder =
+  for c in n.children:
+    if c.stmtKind == VarS:
+      fail("no variables allowed here: " & name(c[0]), c)
+  result = createTree()
+  ...
+
+pluginMain transform
+```
+
+- `fail(msg, at)` records an error at the position of the node `at`; the first
+  one wins and the walk can carry on, so no proc has to pass an error up
+- `failOnErr(n)` does the same for a node the compiler already marked as an
+  error, with the compiler's own message and position
+- `pluginMain(transform)` is the whole entry point: it loads the input, runs
+  `transform`, and saves either its tree or the recorded error
+
+The GLSL example reports `bad.nim(18, 13) Error: undeclared identifier:
+'lengthh'` at the offending identifier, where before it pointed at the start of
+the block and needed a marker string to get there.
+
+## Layer 2: quote with holes (done)
+
+```nim
+import pluginquote          # a separate module: only quoting plugins compile a parser
+
+result.addTree quoteStmt("let $1 = $2 * 10", [n[1], n[2]], n.info)
+```
+
+`$1`, `$2`, ... stand for the given nodes and can sit anywhere, including
+where an identifier goes (`let $1 = ...`). A syntax error in the quoted text is
+reported at the call site with the position inside the text.
+
+Limits: a hole takes a whole node, not text; to build a name from pieces, build
+the identifier with `addIdent`. `$` followed by a digit always means a hole.
+
 ## Not done yet
 
-- layer 2: `quoteStmt("let $1 = $2", name, value)` over `parseStmt`, splicing
-  cursors into the parsed tree
-- layer 3: a plugin entry point that takes `transform` returning a result or an
-  error with a position, and an error type that can be returned from deep
-  inside a walk without the marker-string workaround the example still uses
-- an error from the shader body is reported at the start of the block, not at
-  the offending line; the `err` node would have to carry its own position
+- a hole that takes a string or number directly, without wrapping it in a node
+- the example still emits text rather than quoting code, so it does not yet
+  show layer 2 on a real translator
 
 ## Run the checks
 
