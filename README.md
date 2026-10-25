@@ -43,7 +43,7 @@ through). The same plugin, with byte-identical output on both samples:
 
 | written with | lines |
 |---|---|
-| `into` / `skip` / `hasMore` | 313 |
+| `into` / `skip` / `hasMore` (`examples/glsl/without-kit`) | 313 |
 | this kit, layers 1 and 3 | 162 |
 
 For reference, the generator in shd's Nim 2 macro (`core.nim`) is about 158

@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.." || exit 1
 fail=0
 # A plugin is not rebuilt when a module it imports changes (repros/plugin-import-not-tracked),
 # so start from nothing to be sure a check runs the code as it is now
-rm -rf tests/nimcache examples/glsl/nimcache examples/timed/nimony/nimcache examples/describe/nimcache
+rm -rf tests/nimcache examples/glsl/nimcache examples/glsl/without-kit/nimcache examples/timed/nimony/nimcache examples/describe/nimcache
 check() { # name, expected, actual
   if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1"; echo "  want: $2"; echo "  got:  $3"; fail=1; fi
 }
@@ -18,6 +18,8 @@ check "glsl example: plasma" "$(cat plasma.expected)" "$(nimony c -r plasma.nim 
 check "glsl example: control flow" "$(cat cf.expected)" "$(nimony c -r cf.nim 2>/dev/null)"
 
 sed 's/let d = length(p)/let d = lengthh(p)/' plasma.nim > bad.nim
+check "glsl example: the version without the kit gives the same output" "$(cat plasma.expected)" "$(cd without-kit && nimony c -r plasma.nim 2>/dev/null)"
+
 msg=$(nimony check bad.nim 2>&1 | head -1)
 rm -f bad.nim
 check "glsl example: sem error is reported at its own line" \
