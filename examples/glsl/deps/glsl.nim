@@ -3,12 +3,8 @@ import ".." / ".." / ".." / pluginkit
 
 # Typed NIF of a shader body to GLSL ES 3.00, the same subset as the plugin
 # in shd_nim/experiments/plugin, written with the kit's `[]` and `children`
-# instead of cursor bookkeeping. A node the plugin cannot read is written as
-# /* tag */ so the gaps show in the output
-
-const
-  errMark = "@@err@@"  ## stands in for a node that carries an error, followed by
-  errEnd = "@@end@@"   ## the compiler's message
+# instead of cursor bookkeeping, and with `pluginMain` and `fail` for errors.
+# A node the plugin cannot read is written as /* tag */ so the gaps show
 
 proc typeName(n: NifCursor): string =
   if n.kind == Symbol:
@@ -44,10 +40,8 @@ proc expr(n: NifCursor): string =
   of TagLit:
     case n.exprKind
     of ErrX:
-      var msg = ""
-      for c in n.children:
-        if c.kind == StrLit and msg.len == 0: msg = stringValue(c)
-      result = errMark & msg & errEnd
+      result = ""
+      discard failOnErr(n)
     of InfixX:
       result = if n[0].kind != Symbol: expr(n[0])
                else: binary(name(n[0]), expr(n[1]), expr(n[2]))
@@ -161,14 +155,8 @@ proc shader(n: NifCursor): string =
       result.add "const " & typeName(c[3]) & " " & name(c[0]) & " = " & expr(c[4]) & ";\n"
     else: result.add "// top " & tagText(c) & "\n"
 
-proc build(info: LineInfo; src: string): NifBuilder =
-  let at = src.find(errMark)
-  if at >= 0:
-    let stop = src.find(errEnd, at)
-    let msg = src.substr(at + errMark.len, stop - 1)
-    return errorTree("shader: " & (if msg.len > 0: msg else: "unsupported construct"), info)
+proc transform(n: NifCursor): NifBuilder =
   result = createTree()
-  result.addStrLit src
+  result.addStrLit shader(n)
 
-let inp = loadPluginInput()
-saveTree build(inp.info, shader(inp))
+pluginMain transform

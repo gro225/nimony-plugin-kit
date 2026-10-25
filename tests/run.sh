@@ -15,7 +15,13 @@ check "glsl example: plasma" "$(cat plasma.expected)" "$(nimony c -r plasma.nim 
 check "glsl example: control flow" "$(cat cf.expected)" "$(nimony c -r cf.nim 2>/dev/null)"
 
 sed 's/let d = length(p)/let d = lengthh(p)/' plasma.nim > bad.nim
-msg=$(nimony check bad.nim 2>&1 | head -1 | sed 's/^bad.nim([0-9, ]*) //')
+msg=$(nimony check bad.nim 2>&1 | head -1)
 rm -f bad.nim
-check "glsl example: sem error is reported" "Error: shader: undeclared identifier: 'lengthh'" "$msg"
+check "glsl example: sem error is reported at its own line" \
+  "bad.nim(18, 13) Error: undeclared identifier: 'lengthh'" "$msg"
+
+cd ../../tests || exit 1
+msg=$(nimony check novars.nim 2>&1 | head -1)
+check "kit: fail reports at the node, first error only" \
+  "novars.nim(7, 7) Error: no variables allowed here: b" "$msg"
 exit $fail
