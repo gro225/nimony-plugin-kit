@@ -28,10 +28,22 @@ check "quote: holes are replaced by nodes" "hi
 hi
 42" "$(nimony c -r quote.nim 2>/dev/null)"
 
-cp deps/twice.nim deps/twice.keep
-sed -i.bak 's/let \$1 = \$2 \* 10/let = $2 * 10/' deps/twice.nim
-msg=$(nimony check quote.nim 2>&1 | head -1)
-mv deps/twice.keep deps/twice.nim; rm -f deps/twice.nim.bak
+# a broken copy under another name, so the real plugin and its build never change
+sed 's/let \$1 = \$2 \* 10/let = $2 * 10/' deps/twice.nim > deps/twice_bad.nim
+sed 's#deps/twice#deps/twice_bad#' quote.nim > quote_bad.nim
+msg=$(nimony check quote_bad.nim 2>&1 | head -1)
+rm -f deps/twice_bad.nim quote_bad.nim
 check "quote: a syntax error points into the quoted code" \
-  "quote.nim(9, 9) Error: identifier expected, but got '=' (at 1, 5 of the parsed code)" "$msg"
+  "quote_bad.nim(9, 9) Error: identifier expected, but got '=' (at 1, 5 of the parsed code)" "$msg"
+
+cd ../examples/timed/nimony || exit 1
+out=$(nimony c -r main.nim 2>/dev/null | sed -E 's/^(sum): [0-9]+ us$/\1: N us/')
+check "timed: block runs, then its time is printed" "4999950000
+sum: N us" "$out"
+out=$(nimony c -r collide.nim 2>/dev/null | sed -E 's/^(collide): [0-9]+ us$/\1: N us/')
+check "timed: a fresh name does not clash with the block's own" "5
+collide: N us" "$out"
+out=$(nimony c -r viaimport.nim 2>/dev/null | sed -E 's/^(sum): [0-9]+ us$/\1: N us/')
+check "timed: the template is exported from a module" "4999950000
+sum: N us" "$out"
 exit $fail

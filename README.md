@@ -88,11 +88,55 @@ reported at the call site with the position inside the text.
 Limits: a hole takes a whole node, not text; to build a name from pieces, build
 the identifier with `addIdent`. `$` followed by a digit always means a hole.
 
+### A real example: `timed`
+
+`examples/timed` is the same small macro twice, a timing wrapper that exists in
+most projects. In Nim 2:
+
+```nim
+macro timed*(label: string, body: untyped): untyped =
+  result = quote do:
+    block:
+      let start = getMonoTime()
+      `body`
+      echo `label`, ": ", (getMonoTime().ticks - start.ticks) div 1000, " us"
+```
+
+and as a Nimony plugin with this kit:
+
+```nim
+proc transform(n: NifCursor): NifBuilder =
+  result = createTree()
+  result.addTree quoteStmt("""block:
+  let $$start = $3()
+  $1
+  echo $2, ": ", ($3().$4 - $$start.$4) div 1000, " us"
+""", [n[2], n[1], boundSym("getMonoTime"), boundSym("ticks")], n.info)
+
+pluginMain transform
+```
+
+plus `template timed*(label: string, body: untyped) {.plugin: "deps/timed".}` in
+a module, so `import timedlib` gives `timed` as `import timed` does in Nim 2.
+Both print the same, and the plugin version is about the same size.
+
+Writing it showed what plain `quoteStmt` was missing, and what the compiler is:
+
+- **names the quote introduces** clashed with the caller's own (`start`); `$$start`
+  now makes a fresh symbol, the way `quote do` gensyms a `let`
+- **library procs the quote calls** had to be imported by the caller;
+  `boundSym("getMonoTime")` resolves them where the plugin is written
+- the caller still has to import the module of a `boundSym` symbol, and if it
+  does not the compiler stops with an internal error
+  (`dce2.nim: sowner is not in result`) rather than a message; a smaller case
+  is in `repros/bindsym-unimported-module`. This is a compiler matter, not
+  something the kit can paper over
+
 ## Not done yet
 
 - a hole that takes a string or number directly, without wrapping it in a node
-- the example still emits text rather than quoting code, so it does not yet
-  show layer 2 on a real translator
+- more real examples of macros that generate code, beyond `timed`; the next one
+  worth trying is generating procs from a type
 
 ## Run the checks
 
