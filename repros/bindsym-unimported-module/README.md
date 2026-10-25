@@ -1,4 +1,5 @@
-A template plugin that imports a module and returns a `bindSym` reference to a
+Same cause as https://github.com/nim-lang/nimony/issues/2639 (open), with a case
+that has no overloads. A template plugin that imports a module and returns a `bindSym` reference to a
 proc of it. The calling module does not import that module.
 
 ```sh
