@@ -132,11 +132,38 @@ Writing it showed what plain `quoteStmt` was missing, and what the compiler is:
   is in `repros/bindsym-unimported-module`. This is a compiler matter, not
   something the kit can paper over
 
+### A second example: a proc generated from a type
+
+`examples/describe` declares `describe(x: T): string` for an object type, which
+writes `Person(name: Ann, age: 30)`. That needs the fields of `T`, so the plugin
+asks the compiler for the declaration with `needTypes` and is run again with it.
+The Nim 2 macro (`examples/describe/nim2`) and the plugin print the same, and
+refuse an enum or `int` with the same message at the same position.
+
+| written with | lines |
+|---|---|
+| Nim 2 macro (`getTypeImpl`, `newProc`) | 24 |
+| Nimony plugin with this kit | 38 |
+
+The plugin is longer, and it is fair to say why: it has to ask for the type
+declaration in a separate round, and the list of field statements is built as a
+tree before it is spliced into the proc. Two things in the Nim 2 version are
+easy to get wrong and the plugin does not have them: a field is an
+`nnkIdentDefs` that can hold several names (`x, y: float`), where the plugin
+sees one `fld` per name, and the type check had to be moved ahead of the field
+access to give a message instead of a crash.
+
+The standard library's own `typetraits` plugin writes `slot(decl, idx)`
+(`firstChild` and a skip loop) and scans for declarations with `into`; that is
+`decl[idx]` and `for d in defs.children` in the kit.
+
 ## Not done yet
 
 - a hole that takes a string or number directly, without wrapping it in a node
-- more real examples of macros that generate code, beyond `timed`; the next one
-  worth trying is generating procs from a type
+- generic types and objects with inheritance in `describe`; only plain objects
+  are handled
+- a macro that works on a whole block of code rather than a call or a type (a
+  DSL), other than the GLSL translator
 
 ## Run the checks
 

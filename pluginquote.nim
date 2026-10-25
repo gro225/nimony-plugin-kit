@@ -112,3 +112,23 @@ template boundSym*(name: untyped): NifCursor =
     var t = createTree()
     t.bindSym name
     snapshot(t)
+
+# --- nodes to put in holes -----------------------------------------------------
+
+proc strNode*(s: string): NifCursor =
+  ## A string literal node, for a hole
+  var t = createTree()
+  t.addStrLit s
+  result = snapshot(t)
+
+proc identNode*(s: string): NifCursor =
+  ## An identifier node, for a hole that stands where a name goes
+  var t = createTree()
+  t.addIdent s
+  result = snapshot(t)
+
+proc intNode*(i: BiggestInt): NifCursor =
+  ## An integer literal node, for a hole
+  var t = createTree()
+  t.addIntLit i
+  result = snapshot(t)

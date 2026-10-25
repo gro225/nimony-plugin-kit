@@ -46,4 +46,13 @@ collide: N us" "$out"
 out=$(nimony c -r viaimport.nim 2>/dev/null | sed -E 's/^(sum): [0-9]+ us$/\1: N us/')
 check "timed: the template is exported from a module" "4999950000
 sum: N us" "$out"
+cd ../../describe || exit 1
+check "describe: a proc generated from an object's fields" "Person(name: Ann, age: 30)
+Point(x: 1.5, y: 2.0)" "$(nimony c -r main.nim 2>/dev/null)"
+msg=$(nimony check bad_enum.nim 2>&1 | head -1)
+check "describe: an enum is refused at the argument" \
+  "bad_enum.nim(9, 16) Error: defineDescribe needs an object type, Color is not one" "$msg"
+msg=$(nimony check bad_int.nim 2>&1 | head -1)
+check "describe: a non-object type is refused at the argument" \
+  "bad_int.nim(5, 16) Error: defineDescribe needs an object type, int is not one" "$msg"
 exit $fail
