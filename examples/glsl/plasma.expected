@@ -1,0 +1,19 @@
+uniform float speed;  // default 1.0 range 0.0 .. 4.0
+uniform float rings;  // default 18.0 range 2.0 .. 60.0
+uniform vec3 tint;  // default vec3(0.2, 0.6, 1.0)
+const float TAU = 6.283185307;
+float wave(float d, float phase) {
+  return ((sin(((d * rings) - phase)) * 0.5) + 0.5);
+}
+
+vec4 main(vec2 uv) {
+  vec2 p = ((uv - 0.5) * vec2((resolution.x / resolution.y), 1.0));
+  float d = length(p);
+  float phase = (((time * speed) * TAU) * 0.25);
+  float w = wave(d, phase);
+  float falloff = (1.0 - smoothstep(0.05, 0.75, d));
+  vec3 color = ((tint * w) * falloff);
+  return vec4(color, 1.0);
+}
+
+
