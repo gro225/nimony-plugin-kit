@@ -4,28 +4,25 @@ import ".." / ".." / ".." / pluginquote
 # object's fields as `Person(name: Ann, age: 30)`
 
 proc transform(n: NifCursor): NifBuilder =
-  # (stmts defineDescribe <type>)
-  let typ = n[1]
+  let typ = asPluginCall(n).args[0]
   if typ.kind != Symbol:
     fail("defineDescribe needs the name of an object type", typ)
     return createTree()
-  let decl = need(typ.symId)            # (type name export typevars pragmas body)
+  let decl = need(typ.symId)
   if pending(): return createTree()
-  let body = decl[4]
+  let body = asTypeDecl(decl).body
   if body.typeKind != ObjectT:
     fail("defineDescribe needs an object type, " & name(typ) & " is not one", typ)
     return createTree()
 
-  # (object <inherits> (fld name export pragmas type value)*)
   var fields = createTree()
   fields.withTree StmtsS, n.info:
     var first = true
-    for f in body.children:
-      if f.otherKind == FldU:
-        let label = (if first: "" else: ", ") & name(f[0]) & ": "
-        fields.addTree quoteStmt("result.add $1 & $(x.$2)",
-                                 [strNode(label), identNode(name(f[0]))], n.info)
-        first = false
+    for f in asObjectDecl(body).fields:
+      let label = (if first: "" else: ", ") & name(f.name) & ": "
+      fields.addTree quoteStmt("result.add $1 & $(x.$2)",
+                               [strNode(label), identNode(name(f.name))], n.info)
+      first = false
   result = createTree()
   result.addTree quoteStmt("""proc describe(x: $1): string =
   result = $2

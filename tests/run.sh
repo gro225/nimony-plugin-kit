@@ -9,8 +9,8 @@ check() { # name, expected, actual
   if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1"; echo "  want: $2"; echo "  got:  $3"; fail=1; fi
 }
 
-check "kit: len, [] and children" \
-  'let/5[SymbolDef:a];var/5[SymbolDef:b];proc/9[SymbolDef:f];' \
+check "kit: typed views of let, var and proc" \
+  'let a:(f 64);var b:(i 64);proc f(x:(f 64),)->(f 64);' \
   "$(cd tests && nimony c -r shape.nim 2>/dev/null)"
 
 cd examples/glsl || exit 1

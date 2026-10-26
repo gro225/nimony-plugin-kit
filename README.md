@@ -9,8 +9,8 @@ as a separate repository until it is worth sending upstream.
 Plugins replace macros, but the cursor API makes the common "read a tree and
 produce something from it" job harder than it was with `NimNode`:
 
-- no `n[i]`, `n.len` or `for c in n`; reading a node means entering it with
-  `into` and counting `skip`s, and a miscount shows up only in the output
+- nothing names the parts of a construct: a plugin reads a `proc` by entering it
+  with `into` and counting `skip`s, and a miscount shows up only in the output
 - `into` asserts that its body consumed every child, so an early exit needs
   extra skipping
 - there is no quasi-quote with holes (`nimparser` parses a string, but nothing
@@ -18,22 +18,44 @@ produce something from it" job harder than it was with `NimNode`:
 - an error found deep in a walk has to travel up by hand: globals need
   `assumeSync` and exceptions are `raises`
 
-## Layer 1: look at a node like a `NimNode` (done)
+## Layer 1: typed views of the constructs (done)
+
+Reading a node by position (`n[4]` for the parameters) puts the slot numbers in
+every plugin and breaks the day a slot is added. The compiler's own `decls.nim`
+solves it with typed views (`asTypeDecl`, `asRoutine`, `asLocal`, `asForStmt`):
+an object whose fields are cursors at the named parts. This layer is that, for
+plugins; the names follow `decls.nim`. It came from a comment by Araq on
+nim-lang/nimony#2786, who pointed at `asTypeDecl` and said positional `n[i]` is
+the wrong idea; the first version of this kit had `n[i]`.
 
 ```nim
 import pluginkit
 
-for p in n[4].children:            # the (params ...) of a proc
-  echo name(p[0]), ": ", typeName(p[3])
+let r = asRoutine(n)
+for p in parameters(r):                 # each parameter is a Local
+  echo name(p.name), ": ", p.typ        # `$` prints a node
+echo r.retType
 ```
 
-- `n.len` is the number of children, zero for an atom
-- `n[i]` is child `i`, counting from zero
-- `for c in n.children` visits every child
-- `name(n)` is the text of a symbol (without module suffix) or identifier
+| view | node | fields |
+|---|---|---|
+| `asLocal` | `let`, `var`, `const`, a parameter, a field | `name exported pragmas typ val` |
+| `asRoutine` | `proc`, `func`, `iterator`, `template`, ... | `name exported pattern typevars params retType pragmas effects body` |
+| `asTypeDecl` | `type` | `name exported typevars pragmas body` |
+| `asObjectDecl` | `object` | `parentType`, and `fields(o)` yields each plain field as a `Local` |
+| `asForStmt`, `asWhileStmt` | `for`, `while` | `iter vars body`, `cond body` |
+| `branches(n)` | `if` | yields each `Branch`: `isElse cond body` |
+| `asCall`, `asInfix`, `asDot`, `asAsgn` | calls and operators | `fn` and `args(c)`; `op lhs rhs`; `obj field`; `lhs rhs` |
+| `asBinary`, `asTypedOp` | `and`/`or`; `add`, `lt`, `neg`, ... | `lhs rhs`; `typ lhs rhs` |
+| `asPragma`, `asPluginCall` | a pragma; what a template plugin receives | `name args`; `name args` |
 
-Nothing is copied: each of these works on a copy of the `NifCursor`, which is a
-cheap reference-counted view, so the cursor you pass in never moves.
+Also `for c in n.children`, `name(n)` (a symbol without its module suffix, or an
+identifier) and `elements(n)` for the places where position is the meaning, such
+as a tuple.
+
+Nothing is copied: a view holds cursors, which are cheap reference-counted
+views, so the node it was made from never moves. Only the constructs the
+examples needed are done; adding one is a few lines in `plugindecls.nim`.
 
 ## Measured on a real plugin
 
@@ -44,7 +66,7 @@ through). The same plugin, with byte-identical output on both samples:
 | written with | lines |
 |---|---|
 | `into` / `skip` / `hasMore` (`examples/glsl/without-kit`) | 313 |
-| this kit, layers 1 and 3 | 162 |
+| this kit | 176 |
 
 For reference, the generator in shd's Nim 2 macro (`core.nim`) is about 158
 lines for the same job, and it also emits Metal.
@@ -143,7 +165,7 @@ refuse an enum or `int` with the same message at the same position.
 | written with | lines |
 |---|---|
 | Nim 2 macro (`getTypeImpl`, `newProc`) | 24 |
-| Nimony plugin with this kit | 36 |
+| Nimony plugin with this kit | 33 |
 
 The plugin is longer, and it is fair to say why: the list of field statements is
 built as a tree before it is spliced into the proc, and a type's declaration
@@ -154,8 +176,9 @@ sees one `fld` per name, and the type check had to be moved ahead of the field
 access to give a message instead of a crash.
 
 The standard library's own `typetraits` plugin writes `slot(decl, idx)`
-(`firstChild` and a skip loop) and scans for declarations with `into`; that is
-`decl[idx]` and `for d in defs.children` in the kit.
+(`firstChild` and a skip loop) with named constants for the positions, and scans
+for declarations with `into`; with the views that is `asTypeDecl(decl).body` and
+`for d in defs.children`.
 
 ## Printing a tree
 
@@ -189,7 +212,7 @@ cost two runs of the plugin in all, not three (`tests/pair.nim` counts the
 runs). The request is sent by `pluginMain`, and an error recorded with `fail`
 wins over it. The result of `need` must not be read while `pending()` is true.
 
-It saves little code (`describe` went from 38 to 36 lines). What it removes is
+It saves little code. What it removes is
 the need to know there are rounds at all, and the chance to ask twice for the
 same declaration, which the compiler rejects.
 
