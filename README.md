@@ -202,9 +202,9 @@ A plugin cannot look a type up: it runs in its own process, so it returns
 the round:
 
 ```nim
-let decl = need(typ.symId)      # (type name export typevars pragmas body)
+let decl = need(typ.symId)
 if pending(): return createTree()
-let body = decl[4]              # from here on the declaration is really there
+let body = asTypeDecl(decl).body    # from here on the declaration is really there
 ```
 
 Every `need` before the `pending()` check goes into one request, so two types
