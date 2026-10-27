@@ -6,8 +6,9 @@ as a separate repository until it is worth sending upstream.
 
 ## Why
 
-Plugins replace macros, but the cursor API makes the common "read a tree and
-produce something from it" job harder than it was with `NimNode`:
+Plugins are Nimony's own metaprogramming mechanism (`macro` still exists, as a
+compatibility layer, see below), but the cursor API makes the common "read a tree
+and produce something from it" job harder than it was with `NimNode`:
 
 - nothing names the parts of a construct: a plugin reads a `proc` by entering it
   with `into` and counting `skip`s, and a miscount shows up only in the output
@@ -56,6 +57,29 @@ as a tuple.
 Nothing is copied: a view holds cursors, which are cheap reference-counted
 views, so the node it was made from never moves. Only the constructs the
 examples needed are done; adding one is a few lines in `plugindecls.nim`.
+
+## Nim 2 macros in Nimony
+
+Nimony also accepts `macro`. The language manual calls it "an alternative to
+plugins" that exists "for Nim 2 backwards compatibility reasons": the macro is
+compiled into its own executable and run by the same pipeline as a plugin. Tried
+on nightly 0.6.3-83f492b48, with the macros from `examples/*/nim2` and small ones:
+
+| | |
+|---|---|
+| works unchanged | an `untyped` macro built from `newStmtList`, `add`, `[]`, `len`, `bindSym`, `parseStmt` |
+| does not exist | `quote`, `getType`, `getTypeInst`, `getTypeImpl`, `typeKind`, `symKind`, `newLit`, `newPar`, `prefix`, `postfix`, `error` |
+| differs | `newCall("echo", x)` needs `newCall("echo", [x])`; a bare `typedesc` macro parameter is refused |
+| not typed | a `body: typed` parameter arrives as the untyped tree: `nnkIdent "a"` where Nim 2 gives `nnkSym`, and an empty type slot |
+| crashes | `for c in body` over a `NimNode` stops the compiler (`repros/macro-for-in-nimnode`); an index loop works |
+
+So macros that only rearrange syntax carry over, and macros that look at types do
+not yet: the typed information a plugin gets with `template p(body: typed)
+{.plugin: ...}` is real, a macro's `typed` is not. shd's own macro is of the second
+kind (it uses `getTypeInst`, `getType`, `typeKind` and `symKind` to choose between
+`float`, `int` and the vector types), which is why the GLSL example here is a plugin.
+This was checked by running small macros and by comparing the names shd uses with
+the ones `std/macros` exports in each version, not by porting shd.
 
 ## Measured on a real plugin
 
